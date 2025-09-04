@@ -1,35 +1,25 @@
-from .models import Transaction
+# ec_app/ml_utils.py
 import re
+import pandas as pd
 
-# Simple rules-based example. Can upgrade to ML/LLM later
 CATEGORY_KEYWORDS = {
-    "groceries": ["supermarket", "grocery", "veg", "mart"],
+    "groceries": ["supermarket", "grocery", "veg", "mart", "more", "reliance"],
     "online purchase": ["amazon", "flipkart", "myntra", "ajio"],
-    "fuel": ["hpcl", "bharat petroleum", "fuel", "indian oil"],
+    "fuel": ["hpcl", "bharat petroleum", "bpetro", "fuel", "indian oil", "ioc"],
     "gas": ["gas", "cylinder", "bharat gas"],
-    "loan": ["loan", "emi", "hdfc loan"],
-    "utilities": ["eb", "electricity", "water", "bill", "broadband"],
-    "travel": ["ola", "uber", "irctc", "flight", "bus"],
-    "food": ["swiggy", "zomato", "restaurant", "pizza", "hotel"]
+    "loan": ["loan", "emi", "repayment"],
+    "utilities": ["eb", "electricity", "water", "bill", "broadband", "jiofiber", "airtel"],
+    "travel": ["ola", "uber", "irctc", "flight", "air", "bus", "metro"],
+    "food": ["swiggy", "zomato", "restaurant", "pizza", "hotel", "dine"],
 }
 
-def categorize_expenses(df, user):
-    transactions = []
-    for _, row in df.iterrows():
-        narration = str(row.get('Narration', '')).lower()
-        category = ""
-        for cat, keywords in CATEGORY_KEYWORDS.items():
-            if any(kw in narration for kw in keywords):
-                category = cat
+def categorize_expenses(narration_series: pd.Series):
+    out = []
+    for text in narration_series.fillna("").astype(str).str.lower():
+        cat = ""
+        for c, kws in CATEGORY_KEYWORDS.items():
+            if any(kw in text for kw in kws):
+                cat = c
                 break
-
-        transactions.append(Transaction(
-            user=user,
-            date=row['Date'],
-            narration=row['Narration'],
-            withdrawal=row.get('Withdrawal Amt.', 0),
-            deposit=row.get('Deposit Amt.', 0),
-            balance=row.get('Closing Balance', 0),
-            predicted_category=category,
-        ))
-    return transactions
+        out.append(cat)
+    return out

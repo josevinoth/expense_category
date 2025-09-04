@@ -7,6 +7,7 @@ from .models import BankStatementUpload, Transaction
 from .forms import UploadForm
 import pandas as pd
 from .ml_utils import categorize_expenses  # AI categorizer
+from .utils import normalize_statement
 
 def upload_bank_statement(request):
     if request.method == 'POST':
@@ -16,10 +17,34 @@ def upload_bank_statement(request):
             upload.user = request.user
             upload.save()
 
-            # Parse Excel
-            df = pd.read_excel(upload.file)
-            transactions = categorize_expenses(df, request.user)
-            Transaction.objects.bulk_create(transactions)
+            # Read as Excel or CSV depending on filename
+            f = upload.file
+            name = f.name.lower()
+            if name.endswith(".csv"):
+                raw_df = pd.read_csv(f)
+            else:
+                # .xlsx / .xls → needs openpyxl/xlrd as appropriate
+                raw_df = pd.read_excel(f, engine='openpyxl')  # you installed openpyxl
+
+            df = normalize_statement(raw_df)
+
+            # Run your categorizer on the normalized DF
+            # Expecting a list/series of predicted category strings
+            preds = categorize_expenses(df["narration"])
+
+            # Build Transaction objects
+            objs = []
+            for i, row in df.iterrows():
+                objs.append(Transaction(
+                    user=request.user,
+                    date=row["date"],                  # <-- proper date object
+                    narration=row["narration"],
+                    withdrawal=float(row["withdrawal"] or 0),
+                    deposit=float(row["deposit"] or 0),
+                    balance=(None if pd.isna(row["balance"]) else float(row["balance"])),
+                    predicted_category=(preds[i] if isinstance(preds, (list, pd.Series)) else ""),
+                ))
+            Transaction.objects.bulk_create(objs)
 
             return redirect('dashboard')
     else:
